@@ -9,7 +9,7 @@ import {
   TextInput,
   TouchableOpacity,
   Platform,
-  KeyboardAvoidingView,
+  Keyboard,
   StatusBar,
 } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
@@ -23,11 +23,10 @@ const ChatScreen = () => {
   const insets = useSafeAreaInsets();
   const [messages, setMessages] = useState<any[]>([]);
   const [inputText, setInputText] = useState('');
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  // Efeito para ler as mensagens do Firebase
   useEffect(() => {
     const chatRef = ref(database, 'chats/chat-unico');
-
     const unsubscribe = onValue(chatRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
@@ -35,7 +34,6 @@ const ChatScreen = () => {
           id: key,
           ...data[key],
         }));
-        // Ordena as mensagens por data de criação
         setMessages(loadedMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()));
       } else {
         setMessages([]);
@@ -45,6 +43,27 @@ const ChatScreen = () => {
     return () => unsubscribe();
   }, []);
 
+  // Use a API Keyboard para ajustar o layout
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, []);
+
   const handleSendMessage = () => {
     if (inputText.trim()) {
       const newMessage = {
@@ -52,15 +71,12 @@ const ChatScreen = () => {
         sender: 'user',
         createdAt: new Date().toISOString(),
       };
-
       const chatRef = ref(database, 'chats/chat-unico');
       push(chatRef, newMessage);
-
       setInputText('');
     }
   };
 
-  // Estilos dinâmicos do componente
   const dynamicStyles = StyleSheet.create({
     container: {
       flex: 1,
@@ -99,7 +115,6 @@ const ChatScreen = () => {
       color: theme === 'dark' ? '#000' : '#fff',
       fontWeight: 'bold',
     },
-    // O estilo messageText não é mais necessário, pois o MessageBubble o gerencia.
   });
 
   return (
@@ -110,24 +125,18 @@ const ChatScreen = () => {
         renderItem={({ item }) => <MessageBubble message={item} />}
         style={dynamicStyles.chatArea}
       />
-
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={0}
-      >
-        <View style={[dynamicStyles.inputArea, { paddingBottom: insets.bottom || 10 }]}>
-          <TextInput
-            style={dynamicStyles.input}
-            value={inputText}
-            onChangeText={setInputText}
-            placeholder="Como você está se sentindo?"
-            placeholderTextColor={colors.text}
-          />
-          <TouchableOpacity style={dynamicStyles.sendButton} onPress={handleSendMessage}>
-            <Text style={dynamicStyles.sendButtonText}>Enviar</Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
+      <View style={[dynamicStyles.inputArea, { paddingBottom: insets.bottom + keyboardHeight }]}>
+        <TextInput
+          style={dynamicStyles.input}
+          value={inputText}
+          onChangeText={setInputText}
+          placeholder="Como você está se sentindo?"
+          placeholderTextColor={colors.text}
+        />
+        <TouchableOpacity style={dynamicStyles.sendButton} onPress={handleSendMessage}>
+          <Text style={dynamicStyles.sendButtonText}>Enviar</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
